@@ -17,17 +17,21 @@ app.post("/chat", async (req, res) => {
   try {
     const accessKey = req.headers["x-vision-access-key"];
 
-    if (!process.env.VISION_ACCESS_KEY ||
-        accessKey !== process.env.VISION_ACCESS_KEY) {
+    if (
+      !process.env.VISION_ACCESS_KEY ||
+      accessKey !== process.env.VISION_ACCESS_KEY
+    ) {
       return res.status(401).json({ error: "Access denied" });
     }
 
     const message = req.body.message;
+
     if (!message) {
       return res.status(400).json({ error: "Message required" });
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
+
     if (!apiKey) {
       return res.status(500).json({ error: "AI key not configured" });
     }
@@ -46,6 +50,7 @@ app.post("/chat", async (req, res) => {
     const data = await response.json();
 
     if (!response.ok) {
+      console.error("Gemini error:", data);
       return res.status(500).json({ error: "AI request failed" });
     }
 
@@ -53,12 +58,15 @@ app.post("/chat", async (req, res) => {
       data.candidates?.[0]?.content?.parts?.[0]?.text || "No response";
 
     res.json({ reply });
+
   } catch (error) {
+    console.error("Server error:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
 
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
   console.log("VISION AI server running on port " + PORT);
 });
