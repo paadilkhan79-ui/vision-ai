@@ -17,41 +17,60 @@ app.post("/chat", async (req, res) => {
   try {
     const accessKey = req.headers["x-vision-access-key"];
 
-    if (
-      !process.env.VISION_ACCESS_KEY ||
-      accessKey !== process.env.VISION_ACCESS_KEY
-    ) {
+    if (!process.env.VISION_ACCESS_KEY ||
+        accessKey !== process.env.VISION_ACCESS_KEY) {
       return res.status(401).json({ error: "Access denied" });
     }
 
     const message = req.body.message;
-
     if (!message) {
       return res.status(400).json({ error: "Message required" });
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
-
     if (!apiKey) {
       return res.status(500).json({ error: "AI key not configured" });
     }
 
-    const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=" + apiKey,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: message }] }]
-        })
+    let data;
+    let success = false;
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const response = await fetch(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=" + apiKey,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: message }] }]
+          }),
+          signal: AbortSignal.timeout(40000)
+        }
+      );
+
+      data = await response.json();
+
+      if (response.ok) {
+        success = true;
+        break;
       }
-    );
 
-    const data = await response.json();
+      if (response.status !== 503 && response.status !== 429) {
+        console.error("Gemini error:", data);
+        return res.status(500).json({ error: "AI request failed" });
+      }
 
-    if (!response.ok) {
-      console.error("Gemini error:", data);
-      return res.status(500).json({ error: "AI request failed" });
+      if (attempt < 2) {
+        await new Promise(resolve =>
+          setTimeout(resolve, 1500 * (attempt + 1))
+        );
+      }
+    }
+
+    if (!success) {
+      return res.status(503).json({
+        error: "AI busy. Please try again later."
+      });
     }
 
     const reply =
@@ -60,7 +79,7 @@ app.post("/chat", async (req, res) => {
     res.json({ reply });
 
   } catch (error) {
-    console.error("Server error:", error);
+    console.error("Server error:", error.message);
     res.status(500).json({ error: "Server error" });
   }
 });
