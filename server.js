@@ -28,7 +28,8 @@ app.post("/chat", async (req, res) => {
       return res.status(400).json({ error: "Message required" });
     }
 
-    if (!process.env.GROQ_API_KEY) {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
       return res.status(500).json({ error: "Groq key missing" });
     }
 
@@ -38,12 +39,16 @@ app.post("/chat", async (req, res) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": "Bearer " + process.env.GROQ_API_KEY
+          "Authorization": "Bearer " + apiKey
         },
         body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          messages: [{ role: "user", content: message }]
-        })
+          model: "llama-3.1-8b-instant",
+          messages: [
+            { role: "user", content: message }
+          ],
+          temperature: 0.7
+        }),
+        signal: AbortSignal.timeout(60000)
       }
     );
 
@@ -51,10 +56,14 @@ app.post("/chat", async (req, res) => {
 
     if (!response.ok) {
       console.error("Groq error:", data);
-      return res.status(500).json({ error: "Groq request failed" });
+      return res.status(500).json({
+        error: data.error?.message || "Groq request failed"
+      });
     }
 
-    const reply = data.choices?.[0]?.message?.content || "No response";
+    const reply =
+      data.choices?.[0]?.message?.content || "No response";
+
     res.json({ reply });
 
   } catch (error) {
@@ -68,4 +77,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("VISION AI Groq server running on port " + PORT);
 });
-                                   
+              
