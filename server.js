@@ -1,3 +1,4 @@
+
 const express = require("express");
 const cors = require("cors");
 
@@ -6,7 +7,7 @@ app.use(cors());
 app.use(express.json());
 
 app.get("/", (req, res) => {
-  res.send("VISION AI Server is running!");
+  res.send("VISION AI Groq Server is running!");
 });
 
 app.get("/health", (req, res) => {
@@ -27,55 +28,33 @@ app.post("/chat", async (req, res) => {
       return res.status(400).json({ error: "Message required" });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: "AI key not configured" });
+    if (!process.env.GROQ_API_KEY) {
+      return res.status(500).json({ error: "Groq key missing" });
     }
 
-    let data;
-    let success = false;
-
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const response = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=" + apiKey,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: message }] }]
-          }),
-          signal: AbortSignal.timeout(40000)
-        }
-      );
-
-      data = await response.json();
-
-      if (response.ok) {
-        success = true;
-        break;
+    const response = await fetch(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + process.env.GROQ_API_KEY
+        },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          messages: [{ role: "user", content: message }]
+        })
       }
+    );
 
-      if (response.status !== 503 && response.status !== 429) {
-        console.error("Gemini error:", data);
-        return res.status(500).json({ error: "AI request failed" });
-      }
+    const data = await response.json();
 
-      if (attempt < 2) {
-        await new Promise(resolve =>
-          setTimeout(resolve, 1500 * (attempt + 1))
-        );
-      }
+    if (!response.ok) {
+      console.error("Groq error:", data);
+      return res.status(500).json({ error: "Groq request failed" });
     }
 
-    if (!success) {
-      return res.status(503).json({
-        error: "AI busy. Please try again later."
-      });
-    }
-
-    const reply =
-      data.candidates?.[0]?.content?.parts?.[0]?.text || "No response";
-
+    const reply = data.choices?.[0]?.message?.content || "No response";
     res.json({ reply });
 
   } catch (error) {
@@ -87,5 +66,6 @@ app.post("/chat", async (req, res) => {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log("VISION AI server running on port " + PORT);
+  console.log("VISION AI Groq server running on port " + PORT);
 });
+                                   
